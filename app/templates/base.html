@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>{% block title %}Anonymous Call QR{% endblock %}</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f6f7f9; color: #1d2329; }
+    header { background: #1d2329; color: #fff; padding: 12px 20px; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+    header a, header button { color: #fff; text-decoration: none; background: none; border: 0; font: inherit; cursor: pointer; }
+    main { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #e3e6ea; vertical-align: top; font-size: 14px; }
+    .flash { padding: 10px; margin-bottom: 12px; border-radius: 4px; background: #e6f4ea; }
+    .flash.error, .errors { background: #fdecea; color: #a12622; }
+    .errors { padding: 4px 8px; list-style: none; margin: 4px 0; }
+    form.inline { display: inline; }
+    input[type=text], input[type=password] { padding: 6px; width: 100%; max-width: 360px; box-sizing: border-box; }
+    button, .btn { padding: 5px 10px; border: 1px solid #aab; background: #fff; border-radius: 4px; cursor: pointer; font-size: 13px; color: #1d2329; text-decoration: none; display: inline-block; }
+    code { font-size: 12px; word-break: break-all; }
+    .muted { color: #6b7480; }
+    .table-wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  {% if session.get('admin') %}
+  <header>
+    <strong>Anonymous Call QR</strong>
+    <a href="{{ url_for('admin.owners') }}">Owners</a>
+    <a href="{{ url_for('admin.calls') }}">Call log</a>
+    <a href="{{ url_for('admin.blocklist') }}">Blocklist</a>
+    <form class="inline" method="post" action="{{ url_for('admin.logout') }}">
+      {{ action_form.csrf_token }}<button type="submit">Log out</button>
+    </form>
+  </header>
+  {% endif %}
+  <main>
+    {% for category, message in get_flashed_messages(with_categories=true) %}
+      <div class="flash {{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

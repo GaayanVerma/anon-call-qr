@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Owners</h1>
+<p><a class="btn" href="{{ url_for('admin.owner_new') }}">+ Add owner</a>
+  <span class="muted">Scanners dial {{ twilio_number }} and the owner's code.</span></p>
+<div class="table-wrap">
+<table>
+  <tr><th>Name</th><th>Phone</th><th>Code</th><th>Status</th><th>Created</th><th>QR / sticker</th><th>Actions</th></tr>
+  {% for o in owners %}
+  <tr>
+    <td>{{ o.name }}</td>
+    <td>{{ o.masked_phone }}</td>
+    <td><strong>{{ o.code }}</strong></td>
+    <td>{{ 'Active' if o.active else 'Inactive' }}</td>
+    <td>{{ o.created_at.strftime('%Y-%m-%d') }}</td>
+    <td>
+      <a class="btn" href="{{ url_for('admin.owner_qr', owner_id=o.id) }}" target="_blank">QR</a>
+      <a class="btn" href="{{ url_for('admin.owner_sticker_png', owner_id=o.id) }}">Sticker PNG</a>
+      <a class="btn" href="{{ url_for('admin.owner_sticker_pdf', owner_id=o.id) }}">Sticker PDF</a>
+    </td>
+    <td>
+      <a class="btn" href="{{ url_for('admin.owner_edit', owner_id=o.id) }}">Edit</a>
+      <form class="inline" method="post" action="{{ url_for('admin.owner_toggle', owner_id=o.id) }}">
+        {{ action_form.csrf_token }}<button type="submit">{{ 'Deactivate' if o.active else 'Activate' }}</button>
+      </form>
+      <form class="inline" method="post" action="{{ url_for('admin.owner_regenerate', owner_id=o.id) }}"
+            onsubmit="return confirm('Generate a new code? The printed sticker will stop working.')">
+        {{ action_form.csrf_token }}<button type="submit">New code</button>
+      </form>
+    </td>
+  </tr>
+  {% else %}
+  <tr><td colspan="7" class="muted">No owners yet.</td></tr>
+  {% endfor %}
+</table>
+</div>
+{% endblock %}

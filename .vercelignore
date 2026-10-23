@@ -1,0 +1,10 @@
+.venv
+.env
+.env.*
+!.env.example
+instance
+*.db
+__pycache__
+.pytest_cache
+tests
+Dockerfile
