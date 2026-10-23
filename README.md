@@ -24,8 +24,7 @@ app/voice/routes.py    Twilio webhooks
 app/admin/             password-protected admin (owners, QR/stickers, call log, blocklist)
 app/services/codes.py  random, unique, non-trivial 6-digit codes
 app/services/qr.py     tel: URI, QR PNG, sticker PNG + PDF
-api/index.py, vercel.json   Vercel entry point and routing
-wsgi.py                gunicorn / flask entry point
+wsgi.py                entry point for gunicorn, flask and Vercel
 tests/                 pytest suite
 ```
 
@@ -48,7 +47,7 @@ pytest -q
 Vercel gives the app a stable https URL for Twilio. Vercel functions have no persistent disk, so the app needs a hosted Postgres database there. It refuses to start on Vercel with SQLite.
 
 1. **Create a Postgres database.** In the Vercel dashboard, go to your project → Storage → Create → **Neon** (free tier). This sets `DATABASE_URL` for you. Any other Postgres works too; paste its connection string as `DATABASE_URL`. `postgres://` and `postgresql://` URLs are both accepted.
-2. **Import the project.** Push this folder to a GitHub repo, then in Vercel choose Add New → Project → import the repo. Use the default settings: `vercel.json` routes every path to `api/index.py`, and `requirements.txt` is installed automatically.
+2. **Import the project.** Push this folder to a GitHub repo, then in Vercel choose Add New → Project → import the repo. Use the default settings: Vercel detects the Flask app in `wsgi.py` and installs `requirements.txt` automatically. Don't add a rewrite to a separate entry point, or Flask receives the wrong path and returns 404.
 3. **Set environment variables** (Project → Settings → Environment Variables, Production):
    - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_NUMBER`
    - `SECRET_KEY`, `ADMIN_PASSWORD`, `HASH_SALT`
