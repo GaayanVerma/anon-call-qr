@@ -7,3 +7,8 @@ instance/
 .pytest_cache/
 .vercel
 .env*
+
+# Agent skill files installed by the Neon integration (not part of the app)
+.agents/
+.claude/
+skills-lock.json
