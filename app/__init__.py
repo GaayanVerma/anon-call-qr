@@ -28,6 +28,7 @@ def create_app(overrides=None):
 
     app = Flask(__name__)
     app.config.from_object(config)
+    app.config["PUBLIC_NUMBER"] = config.public_number
     configure_logging()
 
     db.init_app(app)
@@ -35,9 +36,14 @@ def create_app(overrides=None):
 
     from . import models  # noqa: F401  (register models before create_all)
     from .admin.routes import bp as admin_bp
-    from .voice.routes import bp as voice_bp
 
-    csrf.exempt(voice_bp)  # Twilio webhooks are authenticated by signature instead
+    # Only the selected provider's webhooks are exposed. They are authenticated by
+    # Twilio's signature or Exotel's secret URL instead of CSRF tokens.
+    if config.VOICE_PROVIDER == "exotel":
+        from .exotel.routes import bp as voice_bp
+    else:
+        from .voice.routes import bp as voice_bp
+    csrf.exempt(voice_bp)
     app.register_blueprint(voice_bp)
     app.register_blueprint(admin_bp)
 

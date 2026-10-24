@@ -2,7 +2,7 @@
 {% block content %}
 <h1>Owners</h1>
 <p><a class="btn" href="{{ url_for('admin.owner_new') }}">+ Add owner</a>
-  <span class="muted">Scanners dial {{ twilio_number }} and the owner's code.</span></p>
+  <span class="muted">Scanners dial {{ public_number }} and the owner's code.</span></p>
 <div class="table-wrap">
 <table>
   <tr><th>Name</th><th>Phone</th><th>Code</th><th>Status</th><th>Created</th><th>QR / sticker</th><th>Actions</th></tr>

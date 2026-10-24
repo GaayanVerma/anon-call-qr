@@ -1,15 +1,12 @@
 import os
 from datetime import timedelta
 
-REQUIRED_ENV = (
-    "TWILIO_ACCOUNT_SID",
-    "TWILIO_AUTH_TOKEN",
-    "TWILIO_NUMBER",
-    "PUBLIC_BASE_URL",
-    "SECRET_KEY",
-    "ADMIN_PASSWORD",
-    "HASH_SALT",
-)
+REQUIRED_ENV = ("SECRET_KEY", "ADMIN_PASSWORD", "HASH_SALT")
+PROVIDER_ENV = {
+    "twilio": ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_NUMBER", "PUBLIC_BASE_URL"),
+    "exotel": ("EXOTEL_NUMBER", "EXOTEL_WEBHOOK_SECRET"),
+}
+MIN_WEBHOOK_SECRET_LENGTH = 24
 
 
 def database_url():
@@ -25,6 +22,9 @@ class Config:
     """All configuration comes from the environment. Secrets have no defaults."""
 
     def __init__(self):
+        # Which telephony provider answers calls: "twilio" or "exotel".
+        self.VOICE_PROVIDER = os.environ.get("VOICE_PROVIDER", "twilio").strip().lower()
+
         self.TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
         self.TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
         self.TWILIO_NUMBER = os.environ.get("TWILIO_NUMBER", "")
@@ -32,6 +32,10 @@ class Config:
         self.SECRET_KEY = os.environ.get("SECRET_KEY", "")
         self.ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
         self.HASH_SALT = os.environ.get("HASH_SALT", "")
+
+        # Exotel does not sign webhook requests, so its URLs carry this secret instead.
+        self.EXOTEL_NUMBER = os.environ.get("EXOTEL_NUMBER", "")
+        self.EXOTEL_WEBHOOK_SECRET = os.environ.get("EXOTEL_WEBHOOK_SECRET", "")
 
         self.SQLALCHEMY_DATABASE_URI = database_url()
         self.SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -55,8 +59,18 @@ class Config:
         self.PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
         self.TESTING = False
 
+    @property
+    def public_number(self):
+        """The number printed on stickers and encoded in QR codes."""
+        return self.EXOTEL_NUMBER if self.VOICE_PROVIDER == "exotel" else self.TWILIO_NUMBER
+
     def missing(self):
-        missing = [name for name in REQUIRED_ENV if not getattr(self, name)]
+        if self.VOICE_PROVIDER not in PROVIDER_ENV:
+            return [f"VOICE_PROVIDER (must be one of: {', '.join(PROVIDER_ENV)})"]
+        required = REQUIRED_ENV + PROVIDER_ENV[self.VOICE_PROVIDER]
+        missing = [name for name in required if not getattr(self, name)]
+        if self.VOICE_PROVIDER == "exotel" and 0 < len(self.EXOTEL_WEBHOOK_SECRET) < MIN_WEBHOOK_SECRET_LENGTH:
+            missing.append(f"EXOTEL_WEBHOOK_SECRET (at least {MIN_WEBHOOK_SECRET_LENGTH} characters)")
         if self.ON_VERCEL and self.SQLALCHEMY_DATABASE_URI.startswith("sqlite"):
             missing.append("DATABASE_URL (Postgres; SQLite does not persist on Vercel)")
         return missing

@@ -79,7 +79,7 @@ def logout():
 @login_required
 def owners():
     rows = Owner.query.order_by(Owner.created_at.desc()).all()
-    return render_template("admin/owners.html", owners=rows, twilio_number=current_app.config["TWILIO_NUMBER"])
+    return render_template("admin/owners.html", owners=rows, public_number=current_app.config["PUBLIC_NUMBER"])
 
 
 @bp.route("/owners/new", methods=["GET", "POST"])
@@ -147,7 +147,7 @@ def _image_response(data, mimetype, filename, download):
 @login_required
 def owner_qr(owner_id):
     owner = db.get_or_404(Owner, owner_id)
-    data = qr_service.qr_png(current_app.config["TWILIO_NUMBER"], owner.code)
+    data = qr_service.qr_png(current_app.config["PUBLIC_NUMBER"], owner.code)
     return _image_response(data, "image/png", f"qr-{owner.code}.png", request.args.get("download") == "1")
 
 
@@ -155,7 +155,7 @@ def owner_qr(owner_id):
 @login_required
 def owner_sticker_png(owner_id):
     owner = db.get_or_404(Owner, owner_id)
-    data = qr_service.sticker_png(current_app.config["TWILIO_NUMBER"], owner.code)
+    data = qr_service.sticker_png(current_app.config["PUBLIC_NUMBER"], owner.code)
     return _image_response(data, "image/png", f"sticker-{owner.code}.png", True)
 
 
@@ -163,7 +163,7 @@ def owner_sticker_png(owner_id):
 @login_required
 def owner_sticker_pdf(owner_id):
     owner = db.get_or_404(Owner, owner_id)
-    data = qr_service.sticker_pdf(current_app.config["TWILIO_NUMBER"], owner.code)
+    data = qr_service.sticker_pdf(current_app.config["PUBLIC_NUMBER"], owner.code)
     return _image_response(data, "application/pdf", f"sticker-{owner.code}.pdf", True)
 
 

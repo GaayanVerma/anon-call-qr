@@ -10,14 +10,14 @@ from reportlab.pdfgen import canvas
 TAGLINE = "Scan to call the owner. Your number stays private."
 
 
-def tel_uri(twilio_number, code):
+def tel_uri(number, code):
     # ",," makes the dialer pause before sending the extension. "#" is percent-encoded
     # because a literal "#" starts a URI fragment and many Android dialers drop it.
-    return f"tel:{twilio_number},,{code}%23"
+    return f"tel:{number},,{code}%23"
 
 
-def fallback_text(twilio_number, code):
-    return f"Or call {twilio_number} and enter code {code}#"
+def fallback_text(number, code):
+    return f"Or call {number} and enter code {code}#"
 
 
 def qr_image(data, box_size=12):
@@ -33,8 +33,8 @@ def _png_bytes(image):
     return buf.getvalue()
 
 
-def qr_png(twilio_number, code):
-    return _png_bytes(qr_image(tel_uri(twilio_number, code)))
+def qr_png(number, code):
+    return _png_bytes(qr_image(tel_uri(number, code)))
 
 
 def _font(size):
@@ -44,17 +44,17 @@ def _font(size):
         return ImageFont.load_default()
 
 
-def sticker_png(twilio_number, code):
+def sticker_png(number, code):
     width, height = 900, 1200
     sticker = Image.new("RGB", (width, height), "white")
     draw = ImageDraw.Draw(sticker)
 
-    qr = qr_image(tel_uri(twilio_number, code)).resize((700, 700), Image.NEAREST)
+    qr = qr_image(tel_uri(number, code)).resize((700, 700), Image.NEAREST)
     sticker.paste(qr, ((width - 700) // 2, 80))
 
     lines = [
         (TAGLINE, _font(30)),
-        (f"Call {twilio_number}", _font(44)),
+        (f"Call {number}", _font(44)),
         (f"Enter code {code}#", _font(56)),
     ]
     y = 820
@@ -66,21 +66,21 @@ def sticker_png(twilio_number, code):
     return _png_bytes(sticker)
 
 
-def sticker_pdf(twilio_number, code):
+def sticker_pdf(number, code):
     buf = io.BytesIO()
     page_w, page_h = A6
     pdf = canvas.Canvas(buf, pagesize=A6)
     pdf.setTitle("Anonymous call sticker")
 
     qr_size = 80 * mm
-    qr = ImageReader(io.BytesIO(qr_png(twilio_number, code)))
+    qr = ImageReader(io.BytesIO(qr_png(number, code)))
     pdf.drawImage(qr, (page_w - qr_size) / 2, page_h - qr_size - 10 * mm, qr_size, qr_size)
 
     y = page_h - qr_size - 18 * mm
     pdf.setFont("Helvetica", 8.5)
     pdf.drawCentredString(page_w / 2, y, TAGLINE)
     pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawCentredString(page_w / 2, y - 8 * mm, f"Call {twilio_number}")
+    pdf.drawCentredString(page_w / 2, y - 8 * mm, f"Call {number}")
     pdf.setFont("Helvetica-Bold", 16)
     pdf.drawCentredString(page_w / 2, y - 16 * mm, f"Enter code {code}#")
     pdf.rect(4 * mm, 4 * mm, page_w - 8 * mm, page_h - 8 * mm)

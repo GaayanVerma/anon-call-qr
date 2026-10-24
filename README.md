@@ -20,7 +20,9 @@ app/config.py          all settings from environment variables
 app/models.py          Owner, CallLog, Blocklist (SQLAlchemy)
 app/security.py        caller hashing (HMAC-SHA256 + HASH_SALT), X-Twilio-Signature check
 app/abuse.py           blocklist + per-caller / per-owner hourly limits
-app/voice/routes.py    Twilio webhooks
+app/voice/routes.py    Twilio webhooks (VOICE_PROVIDER=twilio)
+app/exotel/routes.py   Exotel call-flow webhooks (VOICE_PROVIDER=exotel)
+app/prompts.py         spoken prompts shared by both providers
 app/admin/             password-protected admin (owners, QR/stickers, call log, blocklist)
 app/services/codes.py  random, unique, non-trivial 6-digit codes
 app/services/qr.py     tel: URI, QR PNG, sticker PNG + PDF
@@ -64,6 +66,75 @@ Notes:
 - Tables are created automatically on first start.
 - After a quiet period, the first call may pause a second or two (cold start) before the greeting. Twilio waits up to 15 seconds.
 - Logs are under Project → Logs. Phone numbers are never written there.
+
+## Using Exotel for an Indian number
+
+Twilio can't give this app a working Indian setup (see the India notes below), so the app also supports **Exotel**, an Indian provider. Set `VOICE_PROVIDER=exotel`. Only one provider is active at a time, and the stickers print the active provider's number.
+
+How it differs from Twilio:
+- **Exotel call flows are built in the Exotel dashboard** (App Bazaar → Flow Builder). The app only answers the steps that need it.
+- **Exotel doesn't sign its requests.** Every webhook URL contains `EXOTEL_WEBHOOK_SECRET` as a path segment, and requests with a wrong secret get a 404. Treat the URLs like passwords.
+- **Exotel sends caller numbers as `0XXXXXXXXXX`.** The app converts them to `+91XXXXXXXXXX` before hashing, so blocking a number typed in the admin still matches.
+- **Exotel waits about 5 seconds for each response.** On Vercel the first call after a quiet period can be slower (cold start plus Neon waking up). If a test call fails at the first step, call again.
+
+### 1. Settings
+
+Set these in Vercel (Production) or `.env`:
+
+| Variable | Value |
+|---|---|
+| `VOICE_PROVIDER` | `exotel` |
+| `EXOTEL_NUMBER` | Your ExoPhone in E.164 form, e.g. `+918047112233` |
+| `EXOTEL_WEBHOOK_SECRET` | A random string of 24+ characters: `python -c "import secrets; print(secrets.token_urlsafe(32))"` |
+
+`SECRET_KEY`, `ADMIN_PASSWORD`, `HASH_SALT` and `DATABASE_URL` stay as before. The Twilio variables are ignored and can stay.
+
+### 2. Webhook URLs
+
+Replace `<BASE>` with your app URL (e.g. `https://anon-call-qr.vercel.app`) and `<SECRET>` with `EXOTEL_WEBHOOK_SECRET`:
+
+| Step | URL | Exotel applet |
+|---|---|---|
+| start | `<BASE>/exotel/<SECRET>/start` | Passthru, **sync** |
+| gather-code | `<BASE>/exotel/<SECRET>/gather-code` | Gather, "Use URL" |
+| code | `<BASE>/exotel/<SECRET>/code` | Passthru, **sync** |
+| gather-reason | `<BASE>/exotel/<SECRET>/gather-reason` | Gather, "Use URL" |
+| reason | `<BASE>/exotel/<SECRET>/reason` | Passthru, **sync** |
+| connect | `<BASE>/exotel/<SECRET>/connect` | Connect, "Dial whom: dynamic URL" |
+| status | `<BASE>/exotel/<SECRET>/status` | Passthru, **async** |
+
+### 3. Build the flow
+
+In Exotel go to App Bazaar → create a new flow, and chain the applets in this order:
+
+```
+1  Passthru (sync)  → start
+     200 OK  → 2
+     302     → Greeting "Sorry, we can't connect your call right now. Please try again later. Goodbye." → Hangup
+2  Gather (URL)     → gather-code          (after gather → 3)
+3  Passthru (sync)  → code
+     200 OK  → 4
+     302     → Greeting "This code is not valid, or the owner can't take calls right now. Please check the sticker and try again later. Goodbye." → Hangup
+4  Gather (URL)     → gather-reason        (after gather → 5)
+5  Passthru (sync)  → reason               (200 OK → 6)
+6  Greeting         "Connecting you to the owner. Your number will stay private."
+7  Connect (URL)    → connect
+     After the call conversation ends → Passthru (async) status → Hangup
+     If nobody answers                → Passthru (async) status → Greeting "The owner is not available right now. Please try again later. Goodbye." → Hangup
+     We didn't dial anyone            → Greeting "Sorry, we could not connect your call. Please try again later. Goodbye." → Hangup
+```
+
+Then go to ExoPhones → your number → assign this flow to incoming calls.
+
+What callers and owners experience:
+- The owner sees the **ExoPhone** as caller ID.
+- The owner hears the reason ("You have an anonymous call from your QR sticker about a vehicle problem") before being connected.
+- Blocked or rate-limited callers, wrong codes and owner limits all end with a polite message. Exotel Passthru only supports two outcomes, so the messages are more general than with Twilio.
+- The code prompt repeats twice if nothing is entered. A missing reason defaults to "other".
+
+### 4. Exotel trial and KYC
+
+Exotel's trial gives you an ExoPhone for a limited time, after you verify your phone number and business details. Full use needs KYC, and trial accounts may only connect to numbers you've verified. Check the current limits in your Exotel dashboard. In the meantime, add the owner phones you test with as verified numbers.
 
 ## Running locally
 
@@ -134,6 +205,7 @@ Keep `HASH_SALT` stable. Changing it makes existing blocklist entries and rate-l
 ## India-specific notes (read before launch)
 
 - **Trial accounts:** Twilio trial accounts can only call verified numbers, and they play a trial message at the start of calls. Every owner number must be verified in the console while testing. Upgrade before real use.
+- **Twilio and India:** Twilio's India voice guidelines say calls *to* India can only be made from non-Indian numbers. So even with an Indian Twilio number, the forwarded call to the owner would come from a foreign number. For a fully Indian setup, use Exotel (see "Using Exotel for an Indian number").
 - **Use an Indian number if possible.** Scanners should ideally dial an Indian number, so it is a normal local or domestic call for them. Indian numbers on Twilio require a regulatory bundle with business KYC documents, and availability and allowed use (inbound voice, forwarding) vary by number type. **Check Twilio's current India number types for voice, and the TRAI rules on call forwarding and caller ID, before you launch. This decides whether this setup is viable at all.**
 - **Foreign numbers:** if you use a non-Indian Twilio number, scanners pay international rates. Indian carriers may also flag, spam-label or block those calls.
 - **Who pays:** the scanner pays their own carrier for the call to the Twilio number. The project pays Twilio for the inbound minutes and for the forwarded leg to the owner's Indian mobile.
