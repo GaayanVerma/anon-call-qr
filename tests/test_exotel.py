@@ -291,3 +291,80 @@ def test_sticker_uses_exophone(app, client, owner):
     page = client.get("/admin/").get_data(as_text=True)
     assert EXOPHONE in page
     assert client.get(f"/admin/owners/{owner.id}/sticker.pdf").status_code == 200
+
+
+# --- Quick flow: Gather -> Connect(/direct) ---
+
+
+def test_direct_dials_owner_with_one_request(app, exotel, owner):
+    resp = exotel("direct", digits=f'"{owner.code}#"')
+    assert resp.status_code == 200 and resp.mimetype == "application/json"
+    body = resp.get_json()
+    assert body["destination"] == {"numbers": [OWNER_PHONE]}
+    assert body["start_call_playback"]["value"] == "You have an anonymous call from your QR sticker. Connecting now."
+    assert body["dial_passthru_event_url"] == f"https://localhost{BASE}/status"
+    call = CallLog.query.one()
+    assert call.owner_id == owner.id and call.status == "dialing" and call.reason is None
+    assert call.caller_hash == caller_hash("+919900011122")
+
+
+@pytest.mark.parametrize("value, status", [('"999999"', "invalid_code"), ('""', "no_code"), (None, "no_code")])
+def test_direct_rejects_bad_code(app, exotel, owner, value, status):
+    params = {} if value is None else {"digits": value}
+    assert exotel("direct", **params).status_code == 302
+    assert CallLog.query.one().status == status
+
+
+def test_direct_rejects_inactive_owner(app, exotel, owner):
+    owner.active = False
+    db.session.commit()
+    assert exotel("direct", digits=f'"{owner.code}"').status_code == 302
+
+
+def test_direct_rejects_blocked_caller(app, exotel, owner):
+    db.session.add(Blocklist(caller_hash=caller_hash("+919900011122")))
+    db.session.commit()
+    assert exotel("direct", digits=f'"{owner.code}"').status_code == 302
+    assert CallLog.query.one().status == "blocked"
+
+
+def test_direct_caller_rate_limit(app, exotel, owner):
+    for i in range(3):
+        assert exotel("direct", sid=f"CA{i}", digits=f'"{owner.code}"').status_code == 200
+    assert exotel("direct", sid="CA3", digits=f'"{owner.code}"').status_code == 302
+    assert CallLog.query.filter_by(twilio_call_sid="CA3").one().status == "rate_limited"
+
+
+def test_direct_owner_rate_limit(app, exotel, owner):
+    for i in range(5):
+        assert exotel("direct", sid=f"CA{i}", caller=f"0990000000{i}", digits=f'"{owner.code}"').status_code == 200
+    resp = exotel("direct", sid="CA9", caller="09900000009", digits=f'"{owner.code}"')
+    assert resp.status_code == 302
+    assert CallLog.query.filter_by(twilio_call_sid="CA9").one().status == "owner_rate_limited"
+
+
+def test_direct_fallback_retry_returns_same_dial(app, exotel, owner):
+    first = exotel("direct", digits=f'"{owner.code}"').get_json()
+    assert exotel("direct", digits=f'"{owner.code}"').get_json() == first
+    assert CallLog.query.count() == 1
+
+
+def test_direct_retry_after_rejection_stays_rejected(app, exotel, owner):
+    exotel("direct", digits='"999999"')
+    assert exotel("direct", digits=f'"{owner.code}"').status_code == 302
+
+
+def test_dial_events_record_only_final_status(app, exotel, owner):
+    exotel("direct", digits=f'"{owner.code}"')
+    exotel("status", Status="ringing")
+    assert CallLog.query.one().status == "dialing"
+    exotel("status", Status="completed", ConversationDuration="17")
+    call = CallLog.query.one()
+    assert call.status == "completed" and call.duration == 17
+
+
+def test_direct_owner_number_only_in_destination(app, exotel, owner):
+    body = exotel("direct", digits=f'"{owner.code}"').get_json()
+    body.pop("destination")
+    assert OWNER_PHONE[-10:] not in str(body)
+    assert OWNER_PHONE[-10:] not in exotel("direct", sid="CA2", digits='"999999"').get_data(as_text=True)

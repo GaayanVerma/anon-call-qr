@@ -89,9 +89,25 @@ Set these in Vercel (Production) or `.env`:
 
 `SECRET_KEY`, `ADMIN_PASSWORD`, `HASH_SALT` and `DATABASE_URL` stay as before. The Twilio variables are ignored and can stay.
 
-### 2. Webhook URLs
+### 2. Quick flow (recommended): two app steps
 
-Replace `<BASE>` with your app URL (e.g. `https://anon-call-qr.vercel.app`) and `<SECRET>` with `EXOTEL_WEBHOOK_SECRET`:
+Replace `<BASE>` with your app URL (e.g. `https://anon-call-qr.vercel.app`) and `<SECRET>` with `EXOTEL_WEBHOOK_SECRET`.
+
+```
+1  Gather   → "Use URL": <BASE>/exotel/<SECRET>/gather-code
+              (fallback URL: same)            after gather → 2
+2  Connect  → Dial whom: dynamic URL: <BASE>/exotel/<SECRET>/direct
+              (fallback URL: same)
+     We didn't dial anyone → Greeting "Sorry, we could not connect your call. Please check the code on the sticker and try again later. Goodbye." → Hangup
+     If nobody answers     → Greeting "The owner is not available right now. Please try again later. Goodbye." → Hangup
+     After the conversation→ Hangup
+```
+
+`/direct` does every check in one request: blocklist, caller limit, code lookup, owner limit. If all pass, it returns the owner's number, and Exotel dials it with the ExoPhone as caller ID. If any check fails, it returns a non-200, and Exotel takes the "We didn't dial anyone" branch. Call results are recorded through the `dial_passthru_event_url` that `/direct` includes, so no status applet is needed.
+
+The trade-offs: there's no reason menu (the owner hears "You have an anonymous call from your QR sticker"), and every rejection plays the same message.
+
+### 3. Full flow (optional): reason menu and separate messages
 
 | Step | URL | Exotel applet |
 |---|---|---|
@@ -103,9 +119,7 @@ Replace `<BASE>` with your app URL (e.g. `https://anon-call-qr.vercel.app`) and 
 | connect | `<BASE>/exotel/<SECRET>/connect` | Connect, "Dial whom: dynamic URL" |
 | status | `<BASE>/exotel/<SECRET>/status` | Passthru, **async** |
 
-### 3. Build the flow
-
-In Exotel go to App Bazaar → create a new flow, and chain the applets in this order:
+Chain the applets in this order:
 
 ```
 1  Passthru (sync)  → start
@@ -124,13 +138,9 @@ In Exotel go to App Bazaar → create a new flow, and chain the applets in this 
      We didn't dial anyone            → Greeting "Sorry, we could not connect your call. Please try again later. Goodbye." → Hangup
 ```
 
-Then go to ExoPhones → your number → assign this flow to incoming calls.
+For either flow, go to ExoPhones → your number → assign the flow to incoming calls.
 
-What callers and owners experience:
-- The owner sees the **ExoPhone** as caller ID.
-- The owner hears the reason ("You have an anonymous call from your QR sticker about a vehicle problem") before being connected.
-- Blocked or rate-limited callers, wrong codes and owner limits all end with a polite message. Exotel Passthru only supports two outcomes, so the messages are more general than with Twilio.
-- The code prompt repeats twice if nothing is entered. A missing reason defaults to "other".
+**Logs:** Exotel sends the caller's number and the URL secret in each request URL. The app masks both in its own logs, but Vercel's platform access log records the raw URL. It's visible only to you and kept about an hour on the Hobby plan. The owner's number is never in a URL.
 
 ### 4. Exotel trial and KYC
 

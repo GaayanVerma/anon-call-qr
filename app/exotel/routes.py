@@ -1,7 +1,12 @@
 """Exotel call-flow webhooks.
 
-Exotel call flows are built in the Exotel dashboard (App Bazaar). This blueprint
-answers the applets that need the app:
+Exotel call flows are built in the Exotel dashboard (App Bazaar). The quick flow
+needs only two applets that call the app:
+
+    Gather (URL)     /gather-code   prompt for the 6-digit code
+    Connect (URL)    /direct        all checks + owner's number, as JSON; non-200 = don't dial
+
+The full flow adds a reason menu and separate rejection messages:
 
     Passthru (sync)  /start         blocklist + caller rate limit   200 = continue, 302 = reject
     Gather (URL)     /gather-code   prompt for the 6-digit code
@@ -21,7 +26,7 @@ import hmac
 import logging
 import re
 
-from flask import Blueprint, abort, current_app, jsonify, request
+from flask import Blueprint, abort, current_app, jsonify, request, url_for
 from werkzeug.exceptions import HTTPException
 
 from ..abuse import caller_rate_exceeded, is_blocked, owner_rate_exceeded
@@ -36,6 +41,7 @@ log = logging.getLogger(__name__)
 bp = Blueprint("exotel", __name__, url_prefix="/exotel/<secret>")
 
 RING_SECONDS = 30
+FINAL_DIAL_STATUSES = {"completed", "busy", "no-answer", "failed", "canceled"}
 CODE_PROMPT_REPEATS = 2
 REASON_PROMPT_REPEATS = 2
 
@@ -191,23 +197,76 @@ def connect():
     call.status = "dialing"
     db.session.commit()
 
-    whisper = f"You have an anonymous call from your QR sticker about {REASON_LABELS[reason]}. Connecting now."
+    return dial_response(call)
+
+
+def dial_response(call):
+    about = f" about {REASON_LABELS[call.reason]}" if call.reason in REASON_LABELS else ""
+    whisper = f"You have an anonymous call from your QR sticker{about}. Connecting now."
+    status_url = url_for(
+        "exotel.status", secret=current_app.config["EXOTEL_WEBHOOK_SECRET"], _external=True, _scheme="https"
+    )
     return jsonify(
         destination={"numbers": [call.owner.real_phone]},
         max_ringing_duration=RING_SECONDS,
         record=False,
         start_call_playback={"playback_to": "callee", "type": "text", "value": whisper},
+        # Exotel reports dial start/end here, so the quick flow needs no status applet.
+        dial_passthru_event_url=status_url,
     )
+
+
+@bp.route("/direct", methods=["GET", "POST"])
+def direct():
+    """Quick flow: Connect applet right after the code Gather. Runs every check at once."""
+    sid = param("CallSid")
+    if not sid:
+        return reject()
+    call = current_call()
+    if call is not None:
+        # Exotel retries via the fallback URL if the first response was slow.
+        if call.status == "dialing" and call.owner is not None and call.owner.active:
+            return dial_response(call)
+        return reject()
+
+    hashed = caller_hash(normalize_indian_number(param("CallFrom") or param("From")))
+    call = CallLog(twilio_call_sid=sid, caller_hash=hashed, status="started")
+    db.session.add(call)
+    if is_blocked(hashed):
+        call.status = "blocked"
+    elif caller_rate_exceeded(hashed, exclude_sid=sid):
+        call.status = "rate_limited"
+    else:
+        owner = find_active_owner(digits())
+        if owner is None:
+            call.status = "invalid_code" if digits() else "no_code"
+        else:
+            call.owner_id = owner.id
+            if owner_rate_exceeded(owner.id, exclude_sid=sid):
+                call.status = "owner_rate_limited"
+            else:
+                call.status = "dialing"
+    db.session.commit()
+
+    if call.status != "dialing":
+        log.info("Rejected call %s: %s", sid, call.status)
+        return reject()
+    log.info("Dialling owner %s for call %s", call.owner_id, sid)
+    return dial_response(call)
 
 
 @bp.route("/status", methods=["GET", "POST"])
 def status():
-    dial_status = param("DialCallStatus") or "failed"
+    # Called by the full flow's async Passthru, and by Connect's dial events (quick flow).
+    # Only final results are recorded; dial-start events are ignored.
+    dial_status = (param("DialCallStatus") or param("Status") or param("CallStatus")).lower()
+    if dial_status not in FINAL_DIAL_STATUSES:
+        return proceed()
     call = current_call()
     if call is not None and call.status == "dialing":
-        call.status = dial_status[:32]
+        call.status = dial_status
         try:
-            call.duration = max(0, int(param("DialCallDuration") or 0))
+            call.duration = max(0, int(param("DialCallDuration") or param("ConversationDuration") or 0))
         except ValueError:
             call.duration = 0
         db.session.commit()
