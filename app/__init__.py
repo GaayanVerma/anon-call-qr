@@ -11,9 +11,12 @@ from .security import PhoneRedactionFilter
 def configure_logging():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     redactor = PhoneRedactionFilter()
-    for handler in logging.getLogger().handlers:
-        if not any(isinstance(f, PhoneRedactionFilter) for f in handler.filters):
-            handler.addFilter(redactor)
+    # Handler filters cover propagated records; logger filters cover loggers such as
+    # werkzeug's access log, which some hosts (e.g. Vercel) attach their own handlers to.
+    targets = logging.getLogger().handlers + [logging.getLogger(), logging.getLogger("werkzeug")]
+    for target in targets:
+        if not any(isinstance(f, PhoneRedactionFilter) for f in target.filters):
+            target.addFilter(redactor)
 
 
 def create_app(overrides=None):

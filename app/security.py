@@ -41,16 +41,17 @@ def twilio_signature_required(view):
 
 
 class PhoneRedactionFilter(logging.Filter):
-    """Defence in depth: mask anything that looks like a phone number in log output."""
+    """Defence in depth: mask phone numbers and the Exotel URL secret in log output."""
 
-    _pattern = re.compile(r"\+?\d[\d\s-]{7,}\d")
+    _phone = re.compile(r"\+?\d[\d\s-]{7,}\d")
+    _exotel_secret = re.compile(r"/exotel/[^/\s?]+/")
 
     def filter(self, record):
         try:
             message = record.getMessage()
         except Exception:
             return True
-        redacted = self._pattern.sub("[redacted]", message)
+        redacted = self._exotel_secret.sub("/exotel/[secret]/", self._phone.sub("[redacted]", message))
         if redacted != message:
             record.msg = redacted
             record.args = None

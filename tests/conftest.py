@@ -15,6 +15,7 @@ OWNER_CODE = "482913"
 
 TEST_CONFIG = {
     "TESTING": True,
+    "VOICE_PROVIDER": "twilio",
     "TWILIO_ACCOUNT_SID": "ACtest",
     "TWILIO_AUTH_TOKEN": "test-auth-token",
     "TWILIO_NUMBER": TWILIO_NUMBER,

@@ -95,3 +95,16 @@ def pdf_text(pdf):
         except (ValueError, zlib.error):
             pass
     return "\n".join(chunks)
+
+
+def test_log_filter_masks_numbers_and_exotel_secret():
+    from app.security import PhoneRedactionFilter
+
+    record = logging.LogRecord(
+        "werkzeug", logging.INFO, __file__, 1,
+        '"GET /exotel/%s/start?CallFrom=%s HTTP/1.1" 200 -', ("s3cr3t-value_xyz", "09900011122"), None,
+    )
+    PhoneRedactionFilter().filter(record)
+    message = record.getMessage()
+    assert "s3cr3t-value_xyz" not in message and "9900011122" not in message
+    assert "/exotel/[secret]/start" in message
