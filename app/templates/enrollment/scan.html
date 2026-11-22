@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Vehicle contact · QuietCall</title><link rel="stylesheet" href="{{ url_for('static', filename='enrollment/enroll.css') }}"></head>
+<body><div class="page-shell"><header class="topbar"><a class="brand" href="/enroll"><span class="brand-mark">Q</span><span>QuietCall<span class="brand-dot">.</span></span></a><span class="top-tag">Anonymous vehicle contact</span></header>
+<main class="scan-main"><div class="surface scan-card">
+{% if active %}
+<div class="round-icon green">✓</div><span class="status active">● ACTIVE</span><h1>Need to reach the vehicle's driver?</h1><p>Call through our privacy-protected number. Neither party needs to share their personal number.</p>
+{% if call_href %}<a class="button primary full-button" href="{{ call_href }}">Call driver privately →</a>{% else %}<p class="pending">Calling is currently unavailable. Please try again later.</p>{% endif %}
+<p class="center-note">Use this only for legitimate vehicle-related reasons.</p>
+{% else %}
+<div class="round-icon amber">!</div><span class="status inactive">● INACTIVE — Activation required</span><h1>This QR code is not active yet.</h1><p>Vehicle contact and other services are unavailable until registration is confirmed.</p><p>If you are the owner, click below to review your details and activate it.</p>
+<a class="button primary full-button" href="{{ url_for('enrollment.activation_page', enrollment_id=record.id) }}">Owner: review details & activate →</a><p class="center-note">Activation requires the original registration browser. Scanning alone can't activate this QR.</p>
+{% endif %}
+</div></main><footer>QuietCall · Built for privacy</footer></div></body></html>

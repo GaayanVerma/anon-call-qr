@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#14263c">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Register your vehicle · QuietCall</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='enrollment/enroll.css') }}">
+</head>
+<body data-enrollment-id="{{ enrollment_id or '' }}">
+  <div class="page-shell">
+    <header class="topbar">
+      <a class="brand" href="/enroll"><span class="brand-mark">Q</span><span>QuietCall<span class="brand-dot">.</span></span></a>
+      <span class="top-tag">Private vehicle contact</span>
+    </header>
+    <main>
+      <div class="intro">
+        <div class="eyebrow">YOUR VEHICLE, ALWAYS REACHABLE</div>
+        <h1>Make it easy to reach you.<br><em>Keep your number private.</em></h1>
+        <p>Register your vehicle and get a QR code to place on it. No documents, no OTP — just your details and one final confirmation.</p>
+      </div>
+      <div class="steps" aria-label="Enrollment steps">
+        <div class="step on" id="step-1"><span>1</span><b>Vehicle details</b></div>
+        <div class="step-line"></div>
+        <div class="step" id="step-2"><span>2</span><b>Review & activate</b></div>
+        <div class="step-line"></div>
+        <div class="step" id="step-3"><span>3</span><b>Your QR</b></div>
+      </div>
+      <div class="alert" id="alert" role="alert" hidden></div>
+      <section class="surface" id="form-screen" {% if enrollment_id %}hidden{% endif %}>
+        <form id="vehicle-form" novalidate>
+          <div class="section-heading"><span class="section-icon">01</span><div><h2>Let's start with you</h2><p>Only you and authorized services can see your phone number.</p></div></div>
+          <div class="form-grid">
+            <label class="field full">Full name <span class="required">*</span><input id="full_name" name="full_name" maxlength="120" autocomplete="name" placeholder="e.g. Alex Morgan" required></label>
+            <label class="field">Phone country code <span class="required">*</span><select id="phone_country" name="phone_country"><option value="IN">🇮🇳 +91 India</option><option value="US">🇺🇸 +1 United States</option></select></label>
+            <label class="field">Mobile number (10 digits) <span class="required">*</span><input id="phone" name="phone" type="tel" autocomplete="tel-national" inputmode="numeric" maxlength="14" placeholder="9876543210" required></label>
+          </div>
+          <div class="rule"></div>
+          <div class="section-heading"><span class="section-icon">02</span><div><h2>Your vehicle</h2><p>We'll use your plate to identify the right registration.</p></div></div>
+          <div class="form-grid">
+            <label class="field">Plate country <span class="required">*</span><select id="country" name="country"><option value="IN">🇮🇳 India</option><option value="US">🇺🇸 United States</option></select></label>
+            <label class="field">License plate <span class="required">*</span><input id="plate" name="plate" maxlength="20" autocomplete="off" placeholder="DL01AB1234" required><small>Uppercase automatically; spaces and dashes removed.</small></label>
+            <label class="field">State / region <span class="required">*</span><select id="region" name="region" required></select></label>
+            <label class="field">Vehicle type <span class="required">*</span><select id="vehicle_type" name="vehicle_type"><option>Sedan</option><option>SUV</option><option>Truck</option><option>EV</option><option>Two-Wheeler</option></select></label>
+            <label class="field">Make <span class="required">*</span><select id="make" name="make" required><option value="">Select make</option><option>Tesla</option><option>Toyota</option><option>Honda</option><option>Hyundai</option><option>Maruti Suzuki</option><option>Tata</option><option>Mahindra</option><option>Kia</option><option>Ford</option><option>BMW</option><option>Mercedes-Benz</option><option>Other</option></select></label>
+            <label class="field">Model <span class="required">*</span><select id="model" name="model" required><option value="">Select model</option></select></label>
+            <label class="field">Color <span class="required">*</span><select id="color" name="color" required><option value="">Select color</option><option>Black</option><option>White</option><option>Gray</option><option>Silver</option><option>Blue</option><option>Red</option><option>Green</option><option>Yellow</option><option>Brown</option><option>Other</option></select></label>
+          </div>
+          <div class="rule"></div>
+          <div class="section-heading"><span class="section-icon">03</span><div><h2>What can we help with?</h2><p>Select the services you want associated with this QR.</p></div></div>
+          <div class="choice-grid" id="services">
+            <label class="option"><input type="checkbox" name="services" value="Parking Alerts" checked><span class="option-symbol">Ⓟ</span><span><b>Parking alerts</b><small>Moved car, blocking access, or hazards</small></span></label>
+            <label class="option"><input type="checkbox" name="services" value="Roadside Assistance"><span class="option-symbol">✦</span><span><b>Roadside assistance</b><small>Make it easier to ask for help</small></span></label>
+            <label class="option"><input type="checkbox" name="services" value="Maintenance Reminders"><span class="option-symbol">↻</span><span><b>Maintenance reminders</b><small>Service updates and reminders</small></span></label>
+          </div>
+          <h3 class="subheading">Preferred communication channel</h3>
+          <div class="radio-grid">
+            <label><input type="radio" name="channel" value="sms" checked> SMS</label>
+            <label><input type="radio" name="channel" value="whatsapp"> WhatsApp</label>
+            <label><input type="radio" name="channel" value="call"> Automated call</label>
+          </div>
+          <label class="consent"><input id="consent" type="checkbox" required><span>I agree to receive vehicle-service notifications through my selected channel, including SMS, WhatsApp, or automated calls. Message and data rates may apply. Consent is optional for marketing and may be withdrawn. <b>Required to enroll.</b></span></label>
+          <p class="legal-note">No marketing enrollment is created. This consent covers the selected vehicle services only; configure opt-out handling before sending messages.</p>
+          <button id="submit" class="button primary full-button" type="submit">Generate my QR code <span aria-hidden="true">→</span></button>
+          <p class="center-note">No OTP · No registration documents · Takes about a minute</p>
+        </form>
+      </section>
+      <section class="surface result-screen" id="result-screen" hidden>
+        <div class="result-grid">
+          <div class="qr-pane">
+            <span class="tiny-label">YOUR VEHICLE QR CODE</span>
+            <div class="qr-frame"><img id="qr-image" width="248" height="248" alt="Unique vehicle QR code"></div>
+            <div class="status inactive" id="status-badge">● INACTIVE — Activation required</div>
+            <small class="scan-hint">This QR points to a private, unique vehicle link.</small>
+            <a id="qr-url" class="qr-link" href="#" target="_blank" rel="noopener noreferrer"></a>
+          </div>
+          <div class="result-details">
+            <span class="eyebrow" id="result-eyebrow">PHASE 1 COMPLETE</span>
+            <h2 id="result-title">Your QR is ready to activate.</h2>
+            <p id="result-copy">Your details are saved, but the code won't connect anyone until you confirm.</p>
+            <div id="review-card" hidden>
+              <h3>Confirm your details</h3>
+              <dl class="summary">
+                <div><dt>Name</dt><dd id="review-name"></dd></div>
+                <div><dt>Phone</dt><dd id="review-phone"></dd></div>
+                <div><dt>License plate</dt><dd id="review-plate"></dd></div>
+                <div><dt>Vehicle</dt><dd id="review-vehicle"></dd></div>
+                <div><dt>Services</dt><dd id="review-services"></dd></div>
+                <div><dt>Channel</dt><dd id="review-channel"></dd></div>
+              </dl>
+              <p class="fineprint">Spot a typo? Use “Edit details” below before activating. Changes require fresh consent.</p>
+            </div>
+            <div id="duplicate-card" class="duplicate" hidden>
+              <b>This plate already has an active primary driver.</b>
+              <p>You can request secondary access or transfer. To protect the current driver, either option requires administrator approval.</p>
+              <div class="actions"><button class="button outline" id="secondary-button" type="button">Request secondary driver</button><button class="button outline" id="transfer-button" type="button">Request transfer</button></div>
+            </div>
+            <div id="pending-card" class="pending" hidden>Approval request submitted. An administrator must approve it before you can activate. Reopen this page in the same browser to check the status.</div>
+            <div class="actions stacked">
+              <button class="button outline" id="edit-button" type="button" hidden>← Edit details</button>
+              <button class="button primary" id="review-button" type="button">Review & activate QR <span aria-hidden="true">→</span></button>
+              <button class="button primary" id="activate-button" type="button" hidden>Confirm details & activate QR ✓</button>
+              <a class="button primary" id="download-button" hidden download>↓ Download QR PNG</a>
+              <button class="button outline" id="print-button" type="button" hidden>Print QR sticker</button>
+              <a class="secondary-link" href="/enroll">Register another vehicle</a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>QuietCall · Your phone number never appears in the QR code.</footer>
+  </div>
+  <script id="region-data" type="application/json">{{ regions | tojson }}</script>
+  <script src="{{ url_for('static', filename='enrollment/enroll.js') }}" defer></script>
+</body>
+</html>
