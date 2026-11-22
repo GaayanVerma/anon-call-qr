@@ -38,6 +38,8 @@ def create_app(overrides=None):
     csrf.init_app(app)
 
     from . import models  # noqa: F401  (register models before create_all)
+    from .enrollment import models as enrollment_models  # noqa: F401  (register enrollment tables)
+    from .enrollment.routes import bp as enrollment_bp
     from .admin.routes import bp as admin_bp
 
     # Only the selected provider's webhooks are exposed. They are authenticated by
@@ -49,10 +51,11 @@ def create_app(overrides=None):
     csrf.exempt(voice_bp)
     app.register_blueprint(voice_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(enrollment_bp)
 
     @app.route("/")
     def index():
-        return redirect(url_for("admin.owners"))
+        return redirect(url_for("enrollment.enroll_page"))
 
     @app.route("/healthz")
     def healthz():
